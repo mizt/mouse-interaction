@@ -7,11 +7,6 @@ typedef struct _Point2D {
 } Point2D;
 
 
-typedef struct _MousePosition {
-    int x = 0;
-    int y = 0;
-} MousePosition;
-
 typedef struct _Bezier {
     Point2D p1 = {0,0};
     Point2D p2 = {0,0};
@@ -26,8 +21,8 @@ typedef float (*EasingFunction)(const float);
 
 typedef struct _MousePropety {
     Bezier *bezier = nullptr;
-    MousePosition *begin = nullptr;
-    MousePosition end{0,0};
+    Point2D *begin = nullptr;
+    Point2D end{0,0};
     int value = 0;
     int duration = 1000;
     bool click = false;
@@ -130,7 +125,7 @@ class MouseInteraction {
                     CGSize screenSize = [[NSScreen mainScreen] frame].size;
                     NSPoint mouseLocation = [NSEvent mouseLocation];
                     
-                    MousePosition *p = new MousePosition();
+                    Point2D *p = new Point2D();
                     p->x = (int)mouseLocation.x;
                     p->y = (int)(screenSize.height-mouseLocation.y);;
                     _prop[0].begin = p;    
@@ -145,7 +140,7 @@ class MouseInteraction {
                 }
                 
                 _prop[0].value += (diff);
-                //
+                
                 if(_prop[0].value>=_prop[0].duration) { // done;
                                             
                     int x = _prop[0].end.x;
@@ -164,7 +159,6 @@ class MouseInteraction {
                     
                     if(this->_prop.size()>1) {
                         int t = this->_prop[0].value-this->_prop[0].duration;
-                        
                         if(this->_prop[0].bezier) delete this->_prop[0].bezier;
                         delete this->_prop[0].begin;
                         this->_prop[0].ease = nullptr; 
@@ -204,18 +198,60 @@ class MouseInteraction {
                 }
                 else {
                     
-                    double t = _prop[0].value/(double)_prop[0].duration;
                     
-                    if(_prop[0].ease) t = _prop[0].ease(t);
                     
-                    int x = 0;
-                    int y = 0;
+                    double x = 0;
+                    double y = 0;
                     
                     if(_prop[0].bezier) {
                         
                         Bezier *b = _prop[0].bezier;
                         
-                         this->getBezierPoint(
+                        double target = MouseInteraction::getBezierLength(*b)*(_prop[0].value/(double)_prop[0].duration);//k*(len/(int)(num-1));
+                            
+                        double px = 0;
+                        double py = 0;
+                        
+                        MouseInteraction::getBezierPoint(
+                            0,
+                            b->p1.x,b->p1.y,
+                            b->p2.x,b->p2.y,
+                            b->p3.x,b->p3.y,
+                            b->p4.x,b->p4.y,
+                            &px,&py
+                        );
+                        
+                        int res = (_prop[0].duration/60.0)*2.0;
+                        
+                        double t = 0;
+                        double sum = 0;
+
+                        for(int n=1; n<res; n++) {
+                            
+                            double dx = 0;
+                            double dy = 0;
+                                
+                            MouseInteraction::getBezierPoint(
+                                n/(double)(res-1),
+                                b->p1.x,b->p1.y,
+                                b->p2.x,b->p2.y,
+                                b->p3.x,b->p3.y,
+                                b->p4.x,b->p4.y,
+                                &dx,&dy
+                            );
+                            
+                            sum += sqrt((px-dx)*(px-dx)+(py-dy)*(py-dy));
+                            
+                            if(target-sum<0) {
+                                t = (n-1)/(double)(res-1);                                
+                                break;
+                            }
+                        
+                            px = dx;
+                            py = dy;
+                        }
+                            
+                        this->getBezierPoint(
                             t,
                             b->p1.x,b->p1.y,
                             b->p2.x,b->p2.y,
@@ -224,11 +260,13 @@ class MouseInteraction {
                             &x,&y
                         );
                         
-                        //NSLog(@"%d,%d",x,y);
                     }
                     
                     else {
                         
+                        double t = _prop[0].value/(double)_prop[0].duration;
+                        if(_prop[0].ease) t = _prop[0].ease(t);
+
                         x = this->_prop[0].begin->x + (this->_prop[0].end.x-this->_prop[0].begin->x)*t;
                         y = this->_prop[0].begin->y + (this->_prop[0].end.y-this->_prop[0].begin->y)*t;
                                                
@@ -245,7 +283,7 @@ class MouseInteraction {
         }
 
 
-        void add(MousePosition *begin, MousePosition end, int duration=1000, bool click=false, EasingFunction ease=nullptr) {
+        void add(Point2D *begin, Point2D end, int duration=1000, bool click=false, EasingFunction ease=nullptr) {
             
              this->_prop.push_back({
                 .bezier = nullptr,
@@ -265,11 +303,7 @@ class MouseInteraction {
             
         }
         
-        static void getBezierPoint(double t,int x1,int y1,int x2,int y2,int x3,int y3,int x4,int y4,int *dx,int *dy) {
-            double tp = 1.0-t;
-            *dx = t*t*t*x4 + 3*t*t*tp*x3 + 3*t*tp*tp*x2 + tp*tp*tp*x1;
-            *dy = t*t*t*y4 + 3*t*t*tp*y3 + 3*t*tp*tp*y2 + tp*tp*tp*y1;
-        }
+        
     
     public:
         
@@ -277,13 +311,19 @@ class MouseInteraction {
             static MouseInteraction instance;
             return &instance;
         }
-               
-        static int getBezierLength(Bezier b) {
             
-            int len = 0;
+        static void getBezierPoint(double t,int x1,int y1,int x2,int y2,int x3,int y3,int x4,int y4,double *dx,double *dy) {
+            double tp = 1.0-t;
+            *dx = t*t*t*x4 + 3*t*t*tp*x3 + 3*t*tp*tp*x2 + tp*tp*tp*x1;
+            *dy = t*t*t*y4 + 3*t*t*tp*y3 + 3*t*tp*tp*y2 + tp*tp*tp*y1;
+        }
+            
+        static double getBezierLength(Bezier b,int res=16) {
+            
+            double len = 0;
                  
-            int px = 0;
-            int py = 0;
+            double px = 0;
+            double py = 0;
             
             MouseInteraction::getBezierPoint(
                 0,
@@ -294,12 +334,11 @@ class MouseInteraction {
                 &px,&py
             );
             
-            int res = 16;
             
             for(int k=0; k<res; k++) {
                 
-                int dx = 0;
-                int dy = 0;
+                double dx = 0;
+                double dy = 0;
                     
                 MouseInteraction::getBezierPoint(
                     k/(double)(res-1),
@@ -317,9 +356,8 @@ class MouseInteraction {
             }
             
             return len;
-            
+                        
         }
-        
         
         void update() {
             double current = CFAbsoluteTimeGetCurrent();            
@@ -337,12 +375,11 @@ class MouseInteraction {
         }
         
         
-          void add(Bezier bezier,int duration, EasingFunction ease=nullptr) {
+        void add(Bezier bezier,int duration, EasingFunction ease=nullptr) {
                 
-            MousePosition *p = new MousePosition();
+            Point2D *p = new Point2D();
             p->x = bezier.p1.x;
             p->y = bezier.p1.y;
-            
             
             Bezier *b = new Bezier();
             b->p1.x = bezier.p1.x;
@@ -373,26 +410,26 @@ class MouseInteraction {
         }
         
         
-        void add(MousePosition end, int duration, EasingFunction ease=nullptr) {
+        void add(Point2D end, int duration, EasingFunction ease=nullptr) {
             this->add(nullptr,end,duration,false,ease);            
         }
         
-        void add(MousePosition end, int duration, bool click, EasingFunction ease=nullptr) {
+        void add(Point2D end, int duration, bool click, EasingFunction ease=nullptr) {
             this->add(nullptr,end,duration,click,ease);            
         }
         
-        void add(MousePosition begin,MousePosition end, int duration, EasingFunction ease=nullptr) {
+        void add(Point2D begin,Point2D end, int duration, EasingFunction ease=nullptr) {
                         
-            MousePosition *p = new MousePosition();
+            Point2D *p = new Point2D();
             p->x = begin.x;
             p->y = begin.y;
             
             this->add(p,end,duration,false,ease);
         }
         
-        void add(MousePosition begin,MousePosition end, int duration ,bool click=false, EasingFunction ease=nullptr) {
+        void add(Point2D begin,Point2D end, int duration ,bool click=false, EasingFunction ease=nullptr) {
                         
-            MousePosition *p = new MousePosition();
+            Point2D *p = new Point2D();
             p->x = begin.x;
             p->y = begin.y;
             
