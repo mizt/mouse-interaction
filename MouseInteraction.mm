@@ -1,21 +1,19 @@
 #import <Cocoa/Cocoa.h>
 #import "MouseInteraction.h"
 
-
-
 @interface AppDelegate:NSObject <NSApplicationDelegate>
 @end
 
 @implementation AppDelegate
 -(void)applicationDidFinishLaunching:(NSNotification*)aNotification {
-/*
+
     MouseInteraction::$()
         ->drag()
         ->add({.x=50,.y=50},{.x=250,.y=250},1000,true,Ease::OutQuad)
         ->undrag()
         ->add({.x=450,.y=450},1000,true,Ease::OutQuad);
-*/
-    
+ 
+/*
     Bezier b = {
         .p1={100,100},  // the first anchor point
         .p2={100,500},  // the first control point
@@ -25,6 +23,8 @@
         
     MouseInteraction::$()->drag()->add(b,1000);
 
+ */
+    
 }
 
 @end
