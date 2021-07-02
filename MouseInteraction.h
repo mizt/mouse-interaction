@@ -15,11 +15,12 @@ typedef struct _Bezier {
 } Bezier;
 
 
-
-
 typedef float (*EasingFunction)(const float);
 
+typedef void (^callback)();
+
 typedef struct _MousePropety {
+    std::string type;
     Bezier *bezier = nullptr;
     Point2D *begin = nullptr;
     Point2D end{0,0};
@@ -27,16 +28,16 @@ typedef struct _MousePropety {
     int duration = 1000;
     bool click = false;
     EasingFunction ease = nullptr;
+    callback onComplete = nullptr;
 } MousePropety;
 
 
 namespace Ease {
     inline static float Linear(const float t) { return t; }
-    // Quad
     inline static float InQuad(const float t) { return t*t; }
     inline static float OutQuad(const float t) { return 1.-InQuad(1.-t); }
     inline static float InOutQuad(const float t) { return (t<0.5)?InQuad(t*2.0)*0.5:0.5+OutQuad((t-0.5)*2.0)*0.5; }
-    //inline static float OutInQuad(const float t) { return (t<0.5)?OutQuad(t*2.0)*0.5:0.5+InQuad((t-0.5)*2.0)*0.5; }
+    inline static float OutInQuad(const float t) { return (t<0.5)?OutQuad(t*2.0)*0.5:0.5+InQuad((t-0.5)*2.0)*0.5; }
 }
 
 class MouseInteraction {
@@ -69,8 +70,7 @@ class MouseInteraction {
         
         void _mouseDown(int px,int py) {
             
-            NSLog(@"mouseDown");
-            
+            //NSLog(@"mouseDown %d,%d",px,py);
             dispatch_async(dispatch_get_main_queue(),^{
                 CGEventRef mouseDown = CGEventCreateMouseEvent(NULL,kCGEventLeftMouseDown,CGPointMake(px,py),kCGMouseButtonLeft);
                 CGEventPost(kCGHIDEventTap,mouseDown);
@@ -80,7 +80,7 @@ class MouseInteraction {
         
         void _mouseUp(int px,int py) {
             
-            NSLog(@"mouseUp");
+            //NSLog(@"mouseUp");
             
             dispatch_async(dispatch_get_main_queue(),^{
                 CGEventRef mouseUp = CGEventCreateMouseEvent(NULL,kCGEventLeftMouseUp,CGPointMake(px,py),kCGMouseButtonLeft);
@@ -103,9 +103,9 @@ class MouseInteraction {
         }
         
         void mouseDragged(int px,int py) {
+            
             dispatch_async(dispatch_get_main_queue(),^{
-                
-                NSLog(@"mouseDragged");
+                //NSLog(@"mouseDragged %d,%d",px,py);
                 
                 if(this->_mouseDragged) {
                     CFRelease(this->_mouseDragged);
@@ -116,9 +116,114 @@ class MouseInteraction {
              });
         }
         
+    
+    void dragged(bool b=true) {
+       this->_dragged = b;
+       if(!this->_dragged&&this->_mouseDragged) {
+           CFRelease(this->_mouseDragged);
+           this->_mouseDragged = nullptr;
+       }
+   }
+    
         void updated(int diff) {
             
             if(_prop.size()>0) {
+                
+                std::string type = _prop[0].type;
+                
+              
+                if(type=="drag"||type=="undrag") {
+                    
+                    NSLog(@"%s",type.c_str());
+                    
+                    if(type=="drag") {
+                        this->dragged(true);
+                        
+                        CGSize screenSize = [[NSScreen mainScreen] frame].size;
+                        NSPoint mouseLocation = [NSEvent mouseLocation];
+                        
+                        this->_mouseDown((int)mouseLocation.x,(int)(screenSize.height-mouseLocation.y));
+                        this->_mouseUp((int)mouseLocation.x,(int)(screenSize.height-mouseLocation.y));
+                        this->_mouseDown((int)mouseLocation.x,(int)(screenSize.height-mouseLocation.y));
+                        
+                        
+                        
+                    }
+                    else if(type=="undrag") {
+                        
+                        CGSize screenSize = [[NSScreen mainScreen] frame].size;
+                        NSPoint mouseLocation = [NSEvent mouseLocation];
+                        
+                        this->_mouseUp(
+                            (int)mouseLocation.x,
+                            (int)(screenSize.height-mouseLocation.y)
+                        );
+
+                        this->dragged(false);
+                    }
+                    
+                    
+                    while(1) {
+                        this->_prop.erase(this->_prop.begin());
+                        std::string type = _prop[0].type;
+                        if(this->_prop.size()>=1) {
+                            if(!(type=="drug"||type=="undrug")) {
+                                break;
+                            }
+                            else {
+                             
+                                
+                                if(type=="drag") {
+                                    this->dragged(true);
+                                }
+                                else if(type=="undrag") {
+                                    
+                                    CGSize screenSize = [[NSScreen mainScreen] frame].size;
+                                    NSPoint mouseLocation = [NSEvent mouseLocation];
+                                    
+                                    this->_mouseUp(
+                                        (int)mouseLocation.x,
+                                        (int)(screenSize.height-mouseLocation.y)
+                                    );
+
+                                    
+                                    this->dragged(false);
+                                }
+                                
+                                
+                            }
+                        }
+                        else {
+                            
+                            if(this->_dragged) {
+                                if(this->_mouseDragged) {
+                                    CFRelease(this->_mouseDragged);
+                                    this->_mouseDragged = nullptr;
+                                }
+                                
+                                this->_mouseUp(this->_prop[0].end.x,this->_prop[0].end.y);
+                            }
+                            
+                            if(this->_mouseDragged) {
+                                CFRelease(this->_mouseDragged);
+                                this->_mouseDragged = nullptr;
+                            }
+                            
+                            this->_prop.erase(_prop.begin());
+                            dispatch_suspend(this->_timer);
+                            
+                            this->_suspend = true;
+                            this->_init = false;
+                            this->_dragged = false;
+                            
+                            return;
+                        }
+                    }
+                }
+                
+                
+                
+                
                 
                 if(_prop[0].begin==nullptr) {
                     
@@ -128,20 +233,23 @@ class MouseInteraction {
                     Point2D *p = new Point2D();
                     p->x = (int)mouseLocation.x;
                     p->y = (int)(screenSize.height-mouseLocation.y);;
-                    _prop[0].begin = p;    
+                    _prop[0].begin = p;
                 
                 }
                 
                 if(this->_init==false) {
-                    this->_init = true; 
-                    if(this->_dragged) {
-                        this->_mouseDown(_prop[0].begin->x,_prop[0].begin->y);
-                    }
+                    this->_init = true;
+                    
                 }
+                
+                //sleep(1);
                 
                 _prop[0].value += (diff);
                 
                 if(_prop[0].value>=_prop[0].duration) { // done;
+                    
+                    //NSLog(@"next");
+                    
                                             
                     int x = _prop[0].end.x;
                     int y = _prop[0].end.y;
@@ -154,6 +262,9 @@ class MouseInteraction {
                         }
                     }
                     else {
+                        
+                        //NSLog(@"_dragged");
+                        
                         this->mouseDragged(x,y);
                     }
                     
@@ -161,7 +272,11 @@ class MouseInteraction {
                         int t = this->_prop[0].value-this->_prop[0].duration;
                         if(this->_prop[0].bezier) delete this->_prop[0].bezier;
                         delete this->_prop[0].begin;
-                        this->_prop[0].ease = nullptr; 
+                        this->_prop[0].ease = nullptr;
+                        if(this->_prop[0].onComplete) {
+                            this->_prop[0].onComplete();
+                            this->_prop[0].onComplete = nullptr;
+                        }
                         this->_prop.erase(this->_prop.begin());
                         if(t<0) {
                             this->updated(t);
@@ -187,16 +302,21 @@ class MouseInteraction {
                             this->_mouseDragged = nullptr;
                         }
                         
-                        this->_prop.erase(_prop.begin());
+                        if(this->_prop[0].onComplete) {
+                            this->_prop[0].onComplete();
+                            this->_prop[0].onComplete = nullptr;
+                        }
+                        
+                        this->_prop.erase(this->_prop.begin());
                         dispatch_suspend(this->_timer);
                         
                         this->_suspend = true;
                         this->_init = false;
                         this->_dragged = false;
                         //NSLog(@"suspend");
-                    }                    
+                    }
                 }
-                else {
+                else { //
                     
                     
                     
@@ -243,7 +363,7 @@ class MouseInteraction {
                             sum += sqrt((px-dx)*(px-dx)+(py-dy)*(py-dy));
                             
                             if(target-sum<0) {
-                                t = (n-1)/(double)(res-1);                                
+                                t = (n-1)/(double)(res-1);
                                 break;
                             }
                         
@@ -282,17 +402,20 @@ class MouseInteraction {
             }
         }
 
-
-        void add(Point2D *begin, Point2D end, int duration=1000, bool click=false, EasingFunction ease=nullptr) {
+        
+    
+        MouseInteraction *add(Point2D *begin, Point2D end, int duration=1000, bool click=false, EasingFunction ease=nullptr,callback onComplete=nullptr) {
             
              this->_prop.push_back({
+                .type = "points",
                 .bezier = nullptr,
                 .begin = begin,
                 .end = end,
                 .value = 0,
                 .duration = duration,
                 .click = click,
-                .ease = ease
+                .ease = ease,
+                .onComplete = onComplete
             });
             
             if(this->_suspend) {
@@ -301,6 +424,7 @@ class MouseInteraction {
                 dispatch_resume(this->_timer);
             }
             
+            return this;
         }
         
         
@@ -360,22 +484,49 @@ class MouseInteraction {
         }
         
         void update() {
-            double current = CFAbsoluteTimeGetCurrent();            
+            double current = CFAbsoluteTimeGetCurrent();
             this->updated((current-this->_then)*1000.0);
             this->_then = current;
         }
         
-        MouseInteraction *dragged(bool b=true) {
-            this->_dragged = b;
-            if(!this->_dragged&&this->_mouseDragged) {
-                CFRelease(this->_mouseDragged);
-                this->_mouseDragged = nullptr;
-            }
+       
+        
+        MouseInteraction *drag() {
+
+            this->_prop.push_back({
+               .type = "drag",
+               .bezier = nullptr,
+               .begin = nullptr,
+               .end = {0,0},
+               .value = 0,
+               .duration = 0,
+               .click = true,
+               .ease = nullptr,
+               .onComplete = nullptr
+           });
+            
             return this;
         }
-        
-        
-        void add(Bezier bezier,int duration, EasingFunction ease=nullptr) {
+    
+        MouseInteraction *undrag() {
+
+            this->_prop.push_back({
+               .type = "undrag",
+               .bezier = nullptr,
+               .begin = nullptr,
+               .end = {0,0},
+               .value = 0,
+               .duration = 0,
+               .click = false,
+               .ease = nullptr,
+               .onComplete = nullptr
+           });
+            
+            return this;
+        }
+    
+    
+        MouseInteraction *add(Bezier bezier,int duration, EasingFunction ease=nullptr,callback onComplete=nullptr) {
                 
             Point2D *p = new Point2D();
             p->x = bezier.p1.x;
@@ -392,13 +543,15 @@ class MouseInteraction {
             b->p4.y = bezier.p4.y;
             
             this->_prop.push_back({
+                .type = "bezier",
                 .bezier = b,
                 .begin = p,
                 .end = {bezier.p4.x,bezier.p4.y},
                 .value = 0,
                 .duration = duration,
                 .click = false,
-                .ease = ease
+                .ease = ease,
+                .onComplete = onComplete
             });
                 
             if(this->_suspend) {
@@ -406,34 +559,41 @@ class MouseInteraction {
                 this->_then = CFAbsoluteTimeGetCurrent();
                 dispatch_resume(this->_timer);
             }
+            
+            return this;
                 
         }
         
         
-        void add(Point2D end, int duration, EasingFunction ease=nullptr) {
-            this->add(nullptr,end,duration,false,ease);            
+    MouseInteraction *add(Point2D end, int duration, EasingFunction ease=nullptr,callback onComplete=nullptr) {
+            return this->add(nullptr,end,duration,false,ease,onComplete);
         }
         
-        void add(Point2D end, int duration, bool click, EasingFunction ease=nullptr) {
-            this->add(nullptr,end,duration,click,ease);            
+    MouseInteraction *add(Point2D end, int duration, bool click, EasingFunction ease=nullptr,callback onComplete=nullptr) {
+            return this->add(nullptr,end,duration,click,ease,onComplete);
         }
         
-        void add(Point2D begin,Point2D end, int duration, EasingFunction ease=nullptr) {
+        MouseInteraction *add(Point2D begin,Point2D end, int duration, EasingFunction ease=nullptr,callback onComplete=nullptr) {
                         
             Point2D *p = new Point2D();
             p->x = begin.x;
             p->y = begin.y;
             
-            this->add(p,end,duration,false,ease);
+            return this->add(p,end,duration,false,ease,onComplete);
         }
         
-        void add(Point2D begin,Point2D end, int duration ,bool click=false, EasingFunction ease=nullptr) {
+        MouseInteraction *add(Point2D begin,Point2D end, int duration ,bool click=false, EasingFunction ease=nullptr,callback onComplete=nullptr) {
                         
             Point2D *p = new Point2D();
             p->x = begin.x;
             p->y = begin.y;
             
-            this->add(p,end,duration,click,ease);
+            //NSLog(@"%d,%d",p->x,p->y);
+            
+            return this->add(p,end,duration,click,ease,onComplete);
         }
         
 };
+
+
+

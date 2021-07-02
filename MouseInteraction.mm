@@ -8,25 +8,23 @@
 
 @implementation AppDelegate
 -(void)applicationDidFinishLaunching:(NSNotification*)aNotification {
-   
-    //MouseInteraction::$()->dragged()->add({.x=50,.y=50},{.x=250,.y=250},1000,true,Ease::OutQuad);
-    
 /*
-    MouseInteraction::$()->add({.x=988,.y=570},1000,true,Ease::OutQuad);
-    MouseInteraction::$()->add({.x=885,.y=570},1000,true,Ease::OutQuad);
-    MouseInteraction::$()->add({.x=988,.y=570},1000,true,Ease::OutQuad);
-    MouseInteraction::$()->add({.x=885,.y=570},1000,true,Ease::OutQuad);
+    MouseInteraction::$()
+        ->drag()
+        ->add({.x=50,.y=50},{.x=250,.y=250},1000,true,Ease::OutQuad)
+        ->undrag()
+        ->add({.x=450,.y=450},1000,true,Ease::OutQuad);
 */
-
+    
     Bezier b = {
-        .p1={100,100},  // 始点
-        .p2={100,500},  // 制御点
-        .p3={1000,500}, // 制御点
-        .p4={1000,100}  // 終点
+        .p1={100,100},  // the first anchor point
+        .p2={100,500},  // the first control point
+        .p3={1000,500}, // the second control point
+        .p4={1000,100}  // the second anchor point
     };
         
-    MouseInteraction::$()->add(b,1000);
-    
+    MouseInteraction::$()->drag()->add(b,1000);
+
 }
 
 @end
